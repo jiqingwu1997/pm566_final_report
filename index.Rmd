@@ -1,0 +1,258 @@
+---
+title: "Arrest Cases Situation in the City of Los Angeles in 2010 and 2019"
+author: "Jiqing Wu"
+output:
+    html_document:
+        toc: TRUE
+        toc_float: TRUE
+---
+<br>
+
+This is my PM566 final project. 
+
+<br>
+```{r setup, message=FALSE, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(include  = TRUE)
+
+library(sqldf)
+library(ggplot2)
+library(tidyr)
+library(data.table)
+library(tidyverse)
+library(leaflet)
+library(dplyr)
+library(dtplyr)
+library(plotly)
+library(knitr)
+library(DT)
+library(leaflet)
+library(RSQLite)
+library(DBI)
+library(knitr)
+con <- dbConnect(SQLite(), ":memory:")
+
+load("/Users/jiqingwu/Desktop/566 Introduction to Health Data Science/midterm/Arrest2010.rda")
+load("/Users/jiqingwu/Desktop/566 Introduction to Health Data Science/midterm/Arrest2019.rda")
+
+#dbWriteTable(con, "Arrest2010", Arrest2010)
+#dbWriteTable(con, "Arrest2019", Arrest2019)
+```
+
+<br>
+
+# I. Brief Description 
+
+In this project, I used the dataset which reflects arrest incidents in the City of Los Angeles from 2010 to 2019. There are 1,320,000 rows in this dataset, each row represents an arrest. 
+The analysis is trying to figure out two questions:
+<br>
+
+-Whether there is a difference between the number of arrest incidents in the City of Los Angeles between 2010 and 2019 
+<br>
+
+-Whether there are any relationship between subject age and sex, patrol divisions area, arrested time and arrest type in the arrest situation in 2019. 
+<br>
+
+The graphs below focus on the main variables which represent subject age, subject sex, patrol divisions location and the type of charge the individual was arrested for repectively.
+
+<br>
+link to original data: https://data.lacity.org/A-Safe-City/Arrest-Data-from-2010-to-2019/yru6-6re4
+
+<br>
+
+# II. Interactive Visualizations 
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+data1<-sqldf(
+'SELECT "Arrest.Type", "Area.Name",
+  AVG(Age) AS avg_Age,
+  AVG(time_imp) AS avg_time
+FROM Arrest2019
+GROUP BY "Arrest.Type",  "Area.Name"')
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+data2<-sqldf(
+'SELECT  COUNT(*) AS count,"Arrest.Type", "Area.Name"
+FROM Arrest2019
+GROUP BY "Arrest.Type",  "Area.Name"')
+data3<- cbind(data1,data2$count)
+```
+
+<br>
+
+## 1. Barchart: Difference between 2010 and 2019
+
+<br>
+The Barchart shows the total number of arrest cases in each area in 2010 and 2019. The number of cases in each area in Los Angeles in 2019 seems to be less than that in 2010.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+data2010<-sqldf(
+'SELECT  COUNT(*) AS count, "Area.Name", "Date"
+FROM Arrest2010
+GROUP BY  "Area.Name"')
+
+data2019<-sqldf(
+'SELECT  COUNT(*) AS count, "Area.Name", "Date"
+FROM Arrest2019
+GROUP BY  "Area.Name"')
+```
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+text2010=paste( paste("Area: ", data2010$Area.Name, sep=""), paste("Total Count: ", data2010$count, sep=""), sep = "<br>")
+
+text2019=paste( paste("Area: ", data2019$Area.Name, sep=""), paste("Total Count: ", data2019$count, sep=""), sep = "<br>")
+
+fig1 <- plot_ly(data2010, x = ~Area.Name, y = ~count, type = 'bar', text = text2010, marker = list(color = 'rgb(158,202,225)',line = list(color = 'rgb(8,48,107)', width = 1.5)),name = '2010')
+fig1 <- fig1 %>% add_trace(data2019, x = ~data2019$Area.Name, y = ~data2019$count, text = text2019, marker = list(color = 'rgb(58,200,225)',line = list(color = 'rgb(8,48,107)', width = 1.5)), name = '2019')
+fig1 <- fig1 %>% layout(yaxis = list(title = 'Count'), xaxis = list(title = 'patrol divisions location'),barmode = 'group', title="Difference between 2010 and 2019")
+
+fig1
+```
+
+
+<br>
+
+## 2. Map: Distribution of arrested position arrested by Patrol Divisions in central area in 2019
+
+<br>
+I used the arrest cases in central area for an instance. It clearly shows that distribution of arrested position is more concentrated in 2019(red dots) than that in 2010(blue dots).
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+# mapping
+Arrest2010map<-Arrest2010[Arrest2010$LAT>=30 & Arrest2010$LON<=-100,]
+Arrest2019map<-Arrest2019[Arrest2019$LAT>=30 & Arrest2019$LON<=-100,]
+
+central2010 <- Arrest2010map[Arrest2010map$Area.Name=="Central",]
+central2019 <- Arrest2019map[Arrest2019map$Area.Name=="Central",]
+
+leaflet() %>% 
+  addProviderTiles("OpenStreetMap") %>% 
+  addCircles(data=central2010, lat=~LAT,lng=~LON, opacity=1, fillOpacity=0.1, radius=100, color="blue") %>%
+  addCircles(data=central2019, lat=~LAT,lng=~LON, opacity=1, fillOpacity=0.1, radius=100, color="red")
+```
+
+
+<br>
+
+## 3. Scatter plot: Mean age by arrest type and area
+
+<br>
+The scatter plot shows number of cases and average age of subjects. The size indicates the number of cases, larger size means there is more cases. The area is indicates by color.
+
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+fig2<-data3 %>% 
+plot_ly(x = ~Arrest.Type, y = ~avg_Age, 
+        color = ~Area.Name, type = "scatter", mode = "markers", 
+        size = ~`data2$count`, sizes = c(5, 50), marker = list(sizemode='diameter', opacity=0.5),
+        hoverinfo = 'text',
+        colors = "Blues",
+        text = ~paste( paste("Average Age: ", avg_Age, sep=""), 
+                       paste("Arrest Type: ", Arrest.Type, sep=""), 
+                       paste("Arrest Area: ", Area.Name, sep=""), 
+                       paste("Total Count: ", `data2$count`, sep=""), 
+                       sep = "<br>")
+        ) %>% layout(title = "Number of cases and average age of arrest type in each area in 2019", yaxis=list(title = "Average Age"), xaxis = list(title = "Arrest Type"))
+        
+fig2
+```
+
+
+<br>
+
+## 4. Boxplot: Relationship of age with sex
+
+<br>
+The boxplot shows age in different arrest type and sex more clearly. It seems that males are older than females in most arrest type. People who are arrested because of dependent reason seem to be youngest. 
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+fig3 <- plot_ly(Arrest2019, x = ~Arrest.Type, y = ~Age, color = ~Sex.Code, type = "box")
+fig3 <- fig3 %>% layout(boxmode = "group", title = "Age by sex and arrest type", xaxis=list(title = "Arrest Type"))
+
+fig3
+```
+
+
+<br>
+
+## 5. Histogram: Relationship of age with arrest type
+
+<br>
+The histogram shows that the age range are overlap and the age of most subjects are concentrated at 25 to 28 in most arrest type.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+Dependent<-sqldf(
+'SELECT  Age,"Arrest.Type"
+FROM Arrest2019
+WHERE "Arrest.Type"="Dependent"')
+
+Felony<-sqldf(
+'SELECT  Age,"Arrest.Type"
+FROM Arrest2019
+WHERE "Arrest.Type"="Felony"')
+
+Infraction<-sqldf(
+'SELECT  Age,"Arrest.Type"
+FROM Arrest2019
+WHERE "Arrest.Type"="Infraction"')
+
+Misdemeanor<-sqldf(
+'SELECT  Age,"Arrest.Type"
+FROM Arrest2019
+WHERE "Arrest.Type"="Misdemeanor"')
+
+Other<-sqldf(
+'SELECT  Age,"Arrest.Type"
+FROM Arrest2019
+WHERE "Arrest.Type"="Other"')
+
+fig4 <- plot_ly(alpha = 0.2)
+fig4 <- fig4 %>% add_histogram(x = ~Dependent$Age, name="Dependent")
+fig4 <- fig4 %>% add_histogram(x = ~Felony$Age, name="Felony")
+fig4 <- fig4 %>% add_histogram(x = ~Infraction$Age, name="Infraction")
+fig4 <- fig4 %>% add_histogram(x = ~Misdemeanor$Age, name="Misdemeanor")
+fig4 <- fig4 %>% add_histogram(x = ~Other$Age, name="Other")
+fig4 <- fig4 %>% layout(barmode = "overlay",title = "Age by arrest type", xaxis=list(title = "Age", yaxis=list(title="Count")))
+
+fig4
+```
+
+
+
+<br>
+
+## 6. Table: More information
+
+<br>
+The table above is an interactive datatable which shows the total count of cases grouped by arrest date, arrest time, patrol divisions location, arrest type and sex.
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+data7<-sqldf(
+'SELECT  COUNT(*) AS Cases, "Area.Name", "Arrest.Date", "Arrest.Type","Sex.Code","PartOfDay"
+FROM Arrest2019
+GROUP BY  "Arrest.Date", "Area.Name", "Arrest.Type","Sex.Code","PartOfDay"')
+
+table1 <- data7  %>% select(Arrest.Date,Cases,Area.Name,Arrest.Type,Sex.Code,PartOfDay)
+datatable(table1)
+```
+
+
+<br>
+
+
+# III. Conclusion
+-The number of cases in each area in Los Angeles in 2019 seems to be less than that in 2010.
+<br>
+-Subject age seems to be affected by arrest type although there are overlap.
+<br>
+-Males tend to be older than females in most of arrest type.
+<br>
+-Subject age seems to be different in different patrol divisions location.
+
+<br>
+
+# IV. Link to the PDF version of the report 
+
+https://github.com/jiqingwu1997/PM566_Final/raw/main/report%20.pdf
+
+<br>
