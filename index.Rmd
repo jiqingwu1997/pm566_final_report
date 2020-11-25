@@ -253,6 +253,6 @@ datatable(table1)
 
 # IV. Link to the PDF version of the report 
 
-https://github.com/jiqingwu1997/PM566_Final/raw/main/report%20.pdf
+https://github.com/jiqingwu1997/pm566_final_report/raw/main/PM566_final-report.pdf
 
 <br>
